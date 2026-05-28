@@ -19,6 +19,10 @@ class KMeans(object):
         """
 
         ### WRITE YOUR CODE HERE
+        self.K = K
+        self.max_iters = max_iters
+        self.centers = None
+        self.cluster_center_label = None
 
 
     def init_centers(self, data):
@@ -33,6 +37,9 @@ class KMeans(object):
         """
 
         ### WRITE YOUR CODE HERE
+        N = data.shape[0]
+        idx = np.random.choice(N, self.K, replace=False)
+        return data[idx]
 
     def compute_distance(self, data, centers):
         """
@@ -46,6 +53,12 @@ class KMeans(object):
         """
 
         ### WRITE YOUR CODE HERE
+        # ||x - c||^2 = ||x||^2 - 2 x.c + ||c||^2, broadcast over points/centers.
+        sq = (np.sum(data ** 2, axis=1, keepdims=True)
+              - 2 * data @ centers.T
+              + np.sum(centers ** 2, axis=1)[np.newaxis, :])
+        sq = np.maximum(sq, 0.0)  # guard against tiny negative rounding errors
+        return np.sqrt(sq)
 
 
     def find_closest_cluster(self, distances):
@@ -59,6 +72,8 @@ class KMeans(object):
         """
 
         ### WRITE YOUR CODE HERE
+        return np.argmin(distances, axis=1)
+
 
 
     def compute_centers(self, data, cluster_assignments):
@@ -74,6 +89,16 @@ class KMeans(object):
         """
 
         ### WRITE YOUR CODE HERE
+        D = data.shape[1]
+        centers = np.zeros((self.K, D))
+        for k in range(self.K):
+            mask = cluster_assignments == k
+            if np.any(mask):
+                centers[k] = data[mask].mean(axis=0)
+            else:
+                # Empty cluster: reseed its center on a random point.
+                centers[k] = data[np.random.randint(data.shape[0])]
+        return centers
 
 
     def k_means(self, data, max_iter=100):
@@ -89,6 +114,16 @@ class KMeans(object):
         """
 
         ### WRITE YOUR CODE HERE
+        centers = self.init_centers(data)
+        cluster_assignments = np.zeros(data.shape[0], dtype=int)
+        for _ in range(max_iter):
+            distances = self.compute_distance(data, centers)
+            cluster_assignments = self.find_closest_cluster(distances)
+            new_centers = self.compute_centers(data, cluster_assignments)
+            if np.allclose(new_centers, centers):
+                break
+            centers = new_centers
+        return centers, cluster_assignments
 
     def assign_labels_to_centers(self, centers, cluster_assignments, true_labels):
         """
@@ -103,6 +138,15 @@ class KMeans(object):
         """
 
         ### WRITE YOUR CODE HERE
+        cluster_center_label = np.zeros(self.K, dtype=int)
+        for k in range(self.K):
+            mask = cluster_assignments == k
+            if np.any(mask):
+                vals, counts = np.unique(true_labels[mask], return_counts=True)
+                cluster_center_label[k] = vals[np.argmax(counts)]
+            else:
+                cluster_center_label[k] = 0
+        return cluster_center_label
 
     def predict_with_centers(self, data, centers, cluster_center_label):
         """
@@ -119,6 +163,9 @@ class KMeans(object):
         """
 
         ### WRITE YOUR CODE HERE
+        distances = self.compute_distance(data, centers)
+        assignments = self.find_closest_cluster(distances)
+        return cluster_center_label[assignments]
 
     def fit(self, training_data, training_labels):
         """
@@ -134,6 +181,14 @@ class KMeans(object):
             pred_labels (array): labels of shape (N,)
         """
         ### WRITE YOUR CODE HERE
+        self.centers, cluster_assignments = self.k_means(training_data, self.max_iters)
+        self.cluster_center_label = self.assign_labels_to_centers(
+            self.centers, cluster_assignments, training_labels
+        )
+        pred_labels = self.predict_with_centers(
+            training_data, self.centers, self.cluster_center_label
+        )
+        return pred_labels
 
     def predict(self, test_data):
         """
@@ -148,3 +203,6 @@ class KMeans(object):
             pred_labels (array): labels of shape (N,)
         """
         ### WRITE YOUR CODE HERE
+        return self.predict_with_centers(
+            test_data, self.centers, self.cluster_center_label
+        )
